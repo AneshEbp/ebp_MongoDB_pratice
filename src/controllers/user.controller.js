@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import User from "../models/User.js";
+import User from "../model/user.model.js";
 
 const hashedPasswordfunc = async (password) => {
   try {
@@ -13,7 +13,7 @@ const hashedPasswordfunc = async (password) => {
 
 export const registerUser = async (req, res) => {
   const { username, email, password } = req.body;
-
+console.log(req.body);
   if (!username || !email || !password) {
     return res.status(400).json({ message: "All fields are required." });
   }
@@ -33,16 +33,16 @@ export const registerUser = async (req, res) => {
   }
 };
 
-export const verifyUser = async (email, password) => {
+export const verifyUser = async (req,res) => {
   try {
-    const userId = req.userId;
+    const userId = req.user.userId;
     const user = await User.findById(userId);
     if (!user) {
       return false;
     }
     user.verified = true;
     await user.save();
-    return true;
+    return res.status(200).json({ message: "User verified successfully." });
   } catch (err) {
     res.status(500).json({ message: "Server error." });
   }
@@ -85,7 +85,7 @@ export const loginUser = async (req, res) => {
 
 export const getUserProfile = async (req, res) => {
   try {
-    const userId = req.userId;
+    const userId = req.user.userId;
     const user = await User.findById(userId, { hashedPassword: 0 });
     if (!user) {
       return res.status(404).json({ message: "User not found." });
@@ -98,9 +98,9 @@ export const getUserProfile = async (req, res) => {
 
 export const updateUserProfile = async (req, res) => {
   try {
-    const userId = req.userId;
-    const updates = req.body;
-
+    const userId = req.user.userId;
+    const {updates} = req.body;
+    console.log("Received updates:", updates.username);
     if (!userId) {
       return res.status(400).json({ message: "User ID is required." });
     }
@@ -113,9 +113,11 @@ export const updateUserProfile = async (req, res) => {
       user.hashedPassword = await hashedPasswordfunc(updates.password);
     }
     if (updates.username) {
+      console.log("Updating username:", updates.username);
       user.name = updates.username;
     }
     if (updates.ph_no) {
+      console.log("Updating phone number:", updates.ph_no);
       user.ph_no = updates.ph_no;
     }
     await user.save();

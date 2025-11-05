@@ -1,6 +1,6 @@
-import Product from "../model/product.model";
-import ProductDetails from "../model/productDetails";
-import ProductVariant from "../model/productVariants.model";
+import Product from "../model/product.model.js";
+import ProductDetails from "../model/productDetails.js";
+import ProductVariant from "../model/productVariants.model.js";
 import mongoose from "mongoose";
 
 export const createProduct = async (req, res) => {
@@ -18,6 +18,7 @@ export const createProduct = async (req, res) => {
       productDetails,
       variants,
     } = req.body;
+    console.log(req.body);
     if (!categoryId || !name || !price || !quantity) {
       return res.status(400).json({ message: "Missing required fields" });
     }
@@ -30,9 +31,8 @@ export const createProduct = async (req, res) => {
       quantity,
     });
     const savedProduct = await newProduct.save({ session });
-    if (!savedProduct) {
-      return res.status(500).json({ message: "Failed to create product" });
-    }
+    console.log(savedProduct);
+    
     let savedProductDetails;
     if (description || productDetails) {
       const newProductDetails = new ProductDetails({
@@ -46,7 +46,7 @@ export const createProduct = async (req, res) => {
     if (variants) {
       const variantPromises = variants.map((variant) => {
         const newVariants = new ProductVariant({
-          productId: savedProductDetails._id,
+          ProductDetailsId: savedProductDetails._id,
           color: variant.color,
           size: variant.size,
           price: variant.price,
@@ -63,7 +63,7 @@ export const createProduct = async (req, res) => {
     await session.abortTransaction();
     session.endSession();
 
-    res.status(500).json({ message: "Internal Server Error" });
+    res.status(500).json({ message: "Internal Server Error", error: error.message });
   }
 };
 
@@ -79,14 +79,16 @@ export const getAllProducts = async (req, res) => {
 export const getProductById = async (req, res) => {
   try {
     const { id } = req.params;
+    console.log(id);
     const product = await Product.findById(id)
       .populate({
-        path: "detailedInfo", // virtual on Product
-        populate: { path: "variants" }, // virtual on ProductDetails
+        path: "detailedInfo", 
+        populate: { path: "variants" }, 
       })
       .lean();
+    res.status(200).json(product);
   } catch (error) {
-    res.status(500).json({ message: "Internal Server Error" });
+    res.status(500).json({ message: "Internal Server Error" , error: error.message});
   }
 };
 
@@ -107,7 +109,7 @@ export const deleteProductById = async (req, res) => {
     );
 
     await ProductVariant.deleteMany(
-      { productId: deletedProduct._id },
+      { ProductDetailsId: deletedProduct._id },
       { session }
     );
 

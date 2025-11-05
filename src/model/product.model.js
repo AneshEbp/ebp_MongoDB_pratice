@@ -1,11 +1,11 @@
 import mongoose, { trusted } from "mongoose";
-import Category from "./category.model";
+import Category from "./category.model.js";
 
 const productSchema = new mongoose.Schema(
   {
-    CategoryID: {
+    categoryId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: Category,
+      ref: "Category",
       required: true,
     },
     name: {
@@ -28,10 +28,13 @@ const productSchema = new mongoose.Schema(
       default: true,
     },
     recentReview: {
-      userID: {
+      userId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: User,
-        required: true,
+        ref: "User",
+      },
+      reviewId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Review",
       },
       ratingValue: {
         type: Number,
@@ -39,8 +42,9 @@ const productSchema = new mongoose.Schema(
       comment: {
         type: String,
       },
-      updateAt: {
+      updatedAt: {
         type: Date,
+        default: Date.now,
       },
     },
   },
@@ -50,10 +54,10 @@ const productSchema = new mongoose.Schema(
 productSchema.index({ CategoryID: 1, name: 1 });
 
 productSchema.virtual("detailedInfo", {
-  ref: "ProductDetail",
+  ref: "ProductDetails",
   localField: "_id",
   foreignField: "productId",
-  justOne: false,   
+  justOne: false,
 });
 
 productSchema.set("toObject", { virtuals: true });

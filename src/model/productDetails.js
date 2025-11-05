@@ -15,7 +15,7 @@ const productDetailsSchema = new mongoose.Schema({
 });
 
 productDetailsSchema.index({ productId: 1 });
-productDetailsSchema.virtual("virants", {
+productDetailsSchema.virtual("variants", {
   ref: "ProductVariant",
   localField: "_id",
   foreignField: "ProductDetailsId",

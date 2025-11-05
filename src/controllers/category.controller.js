@@ -1,8 +1,13 @@
-import Category from "../models/category.model.js";
+import Category from "../model/category.model.js";
 
 export const addCategory = (req, res) => {
   const { name, description } = req.body;
   try {
+    if (req.userRole !== "admin") {
+      return res
+        .status(403)
+        .json({ message: "Forbidden: Insufficient permissions" });
+    }
     const newCategory = new Category({ name, description });
     newCategory.save();
     res
@@ -16,6 +21,11 @@ export const addCategory = (req, res) => {
 export const markCategoryAsSubCategory = async (req, res) => {
   const { categoryId, parentCategoryId } = req.body;
   try {
+    if (req.userRole !== "admin") {
+      return res
+        .status(403)
+        .json({ message: "Forbidden: Insufficient permissions" });
+    }
     const category = await Category.findById(categoryId);
     const parentCategory = await Category.findById(parentCategoryId);
 
@@ -36,6 +46,11 @@ export const markCategoryAsSubCategory = async (req, res) => {
 
 export const getAllCategories = async (req, res) => {
   try {
+    if (req.userRole !== "admin") {
+      return res
+        .status(403)
+        .json({ message: "Forbidden: Insufficient permissions" });
+    }
     const categories = await Category.find();
     res.status(200).json({ categories });
   } catch (error) {
