@@ -5,6 +5,11 @@ import mongoose from "mongoose";
 
 export const createProduct = async (req, res) => {
   const session = await mongoose.startSession();
+  if (req.userRole !== "admin") {
+    return res
+      .status(403)
+      .json({ message: "Forbidden: Insufficient permissions" });
+  }
   try {
     session.startTransaction();
 
@@ -18,7 +23,7 @@ export const createProduct = async (req, res) => {
       productDetails,
       variants,
     } = req.body;
-    console.log(req.body);
+
     if (!categoryId || !name || !price || !quantity) {
       return res.status(400).json({ message: "Missing required fields" });
     }
@@ -31,8 +36,7 @@ export const createProduct = async (req, res) => {
       quantity,
     });
     const savedProduct = await newProduct.save({ session });
-    console.log(savedProduct);
-    
+
     let savedProductDetails;
     if (description || productDetails) {
       const newProductDetails = new ProductDetails({
@@ -63,7 +67,9 @@ export const createProduct = async (req, res) => {
     await session.abortTransaction();
     session.endSession();
 
-    res.status(500).json({ message: "Internal Server Error", error: error.message });
+    res
+      .status(500)
+      .json({ message: "Internal Server Error", error: error.message });
   }
 };
 
@@ -82,18 +88,25 @@ export const getProductById = async (req, res) => {
     console.log(id);
     const product = await Product.findById(id)
       .populate({
-        path: "detailedInfo", 
-        populate: { path: "variants" }, 
+        path: "detailedInfo",
+        populate: { path: "variants" },
       })
       .lean();
     res.status(200).json(product);
   } catch (error) {
-    res.status(500).json({ message: "Internal Server Error" , error: error.message});
+    res
+      .status(500)
+      .json({ message: "Internal Server Error", error: error.message });
   }
 };
 
 export const deleteProductById = async (req, res) => {
   const session = await mongoose.startSession();
+  if (req.userRole !== "admin") {
+    return res
+      .status(403)
+      .json({ message: "Forbidden: Insufficient permissions" });
+  }
   try {
     session.startTransaction();
 
@@ -103,13 +116,13 @@ export const deleteProductById = async (req, res) => {
       return res.status(404).json({ message: "Product not found" });
     }
 
-    await ProductDetails.findOneAndDelete(
+    const productDetails = await ProductDetails.findOneAndDelete(
       { productId: deletedProduct._id },
       { session }
     );
 
     await ProductVariant.deleteMany(
-      { ProductDetailsId: deletedProduct._id },
+      { ProductDetailsId: productDetails._id },
       { session }
     );
 
@@ -122,5 +135,59 @@ export const deleteProductById = async (req, res) => {
     session.endSession();
 
     res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+export const updateProductVariant = async (req, res) => {
+  if (req.userRole !== "admin") {
+    return res
+      .status(403)
+      .json({ message: "Forbidden: Insufficient permissions" });
+  }
+  try {
+    const { variantId, changes } = req.body;
+
+    if (!variantId || !changes) {
+      return res
+        .status(400)
+        .json({ message: "variantId and changes are required" });
+    }
+
+    const variant = await ProductVariant.findById(variantId);
+    if (changes.size) variant.size = changes.size;
+    if (changes.color) variant.color = changes.color;
+    if (changes.price) variant.price = changes.price;
+
+    await variant.save();
+    res.status(200).json({ message: "updated" });
+  } catch (err) {
+    console.log(err);
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+export const updateProductDetails = async (req, res) => {
+  if (req.userRole !== "admin") {
+    return res
+      .status(403)
+      .json({ message: "Forbidden: Insufficient permissions" });
+  }
+  try {
+    const { productDetailsId, changes } = req.body;
+
+    if (!productDetailsId || !changes) {
+      return res
+        .status(400)
+        .json({ message: "productDetailsId and changes are required" });
+    }
+    const details = await ProductDetails.findById(productDetailsId);
+    if (changes.description) details.description = changes.description;
+    if (changes.productDetails) details.productDetails = changes.productDetails;
+
+    await details.save();
+    res.status(200).json({ message: "updated" });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ message: "server error" + err });
   }
 };

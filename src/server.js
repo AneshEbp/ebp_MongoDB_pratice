@@ -25,6 +25,9 @@ app.use("/api/reviews", reviewRoutes);
 import cartRoutes from "./routes/cart.routes.js";
 app.use("/api/cart", cartRoutes);
 
+import orderRoutes from "./routes/order.routes.js";
+app.use("/api/order", orderRoutes);
+
 app.listen(process.env.PORT || 3000, async () => {
   await connectDB();
   console.log(`Server is running on port ${process.env.PORT || 3000}`);

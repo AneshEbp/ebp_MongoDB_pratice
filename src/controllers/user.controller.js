@@ -13,7 +13,7 @@ const hashedPasswordfunc = async (password) => {
 
 export const registerUser = async (req, res) => {
   const { username, email, password } = req.body;
-console.log(req.body);
+  console.log(req.body);
   if (!username || !email || !password) {
     return res.status(400).json({ message: "All fields are required." });
   }
@@ -33,15 +33,14 @@ console.log(req.body);
   }
 };
 
-export const verifyUser = async (req,res) => {
+export const verifyUser = async (req, res) => {
   try {
     const userId = req.user.userId;
-    const user = await User.findById(userId);
-    if (!user) {
-      return false;
-    }
-    user.verified = true;
-    await user.save();
+    await User.findOneAndUpdate(
+      { _id: userId },
+      { $set: { verified: true } },
+      { new: true }
+    );
     return res.status(200).json({ message: "User verified successfully." });
   } catch (err) {
     res.status(500).json({ message: "Server error." });
@@ -99,8 +98,7 @@ export const getUserProfile = async (req, res) => {
 export const updateUserProfile = async (req, res) => {
   try {
     const userId = req.user.userId;
-    const {updates} = req.body;
-    console.log("Received updates:", updates.username);
+    const { updates } = req.body;
     if (!userId) {
       return res.status(400).json({ message: "User ID is required." });
     }
@@ -113,11 +111,9 @@ export const updateUserProfile = async (req, res) => {
       user.hashedPassword = await hashedPasswordfunc(updates.password);
     }
     if (updates.username) {
-      console.log("Updating username:", updates.username);
       user.name = updates.username;
     }
     if (updates.ph_no) {
-      console.log("Updating phone number:", updates.ph_no);
       user.ph_no = updates.ph_no;
     }
     await user.save();

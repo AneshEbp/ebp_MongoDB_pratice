@@ -2,64 +2,6 @@ import mongoose from "mongoose";
 import Cart from "../model/cart.model.js";
 import LargeCartItem from "../model/large_Cart_Items.model.js";
 
-// export const createCart = async (req, res) => {
-//   const session = await mongoose.startSession();
-//   try {
-//     session.startTransaction();
-
-//     const userId = req.user.userId;
-//     const { items } = req.body;
-
-//     if (!items || items.length === 0) {
-//       await session.abortTransaction();
-//       return res.status(400).json({ message: "Cart items are required." });
-//     }
-
-//     const isCartActive = await Cart.findOne({
-//       userId,
-//       status: "Active",
-//     }).session(session);
-
-//     if (!isCartActive) {
-//       const newCart = new Cart({ userId, cart_items: items });
-//       await newCart.save({ session });
-//       await session.commitTransaction();
-//       return res.status(201).json(newCart);
-//     }
-
-//     const exisitingItemIds = new Set(
-//       isCartActive.cart_items.map((i) => i.productId.toString())
-//     );
-
-//     const newCartItems = items.filter(
-//       (i) => !exisitingItemIds.has(i.productId.toString())
-//     );
-//     isCartActive.cart_items.push(...newCartItems);
-
-//     const exisitingItems = items.filter((i) =>
-//       exisitingItemIds.has(i.productId.toString())
-//     );
-
-//     exisitingItems.forEach((item) => {
-//       const cartItem = isCartActive.cart_items.find(
-//         (i) => i.productId.toString() === item.productId.toString()
-//       );
-//       if (cartItem) {
-//         cartItem.quantity += item.quantity; // increment quantity
-//       }
-//     });
-
-//     await isCartActive.save({ session });
-//     await session.commitTransaction();
-//     res.status(201).json(isCartActive);
-//   } catch (err) {
-//     await session.abortTransaction();
-//     res.status(500).json({ message: err.message });
-//   } finally {
-//     session.endSession();
-//   }
-// };
-
 export const createCart = async (req, res) => {
   const session = await mongoose.startSession();
   try {
@@ -144,6 +86,7 @@ export const createCart = async (req, res) => {
       const itemsForLargeCart = newCartItems.slice(spaceLeft);
 
       if (itemsForCart.length > 0) cartt.cart_items.push(...itemsForCart);
+
       if (itemsForLargeCart.length > 0) {
         const largeItems = itemsForLargeCart.map((item) => ({
           cartId: cartt._id,
@@ -206,11 +149,14 @@ export const modifyCart = async (req, res) => {
 
       // Try to find in cart_items
       let item = cart.cart_items.id(subdocumentId);
+      
       if (item) {
-        item.quantity += quantityChange;
+        item.quantity = quantityChange;
         if (item.quantity <= 0) {
           // Remove if quantity <= 0
-          item.remove();
+          cart.cart_items = cart.cart_items.filter(
+            (i) => i._id.toString() !== subdocumentId
+          );
         }
       } else {
         // Try to find in LargeCartItem
@@ -220,7 +166,7 @@ export const modifyCart = async (req, res) => {
         }).session(session);
 
         if (largeItem) {
-          largeItem.quantity += quantityChange;
+          largeItem.quantity = quantityChange;
           if (largeItem.quantity <= 0) {
             await LargeCartItem.deleteOne({ _id: subdocumentId }, { session });
           } else {
@@ -265,7 +211,7 @@ export const modifyCart = async (req, res) => {
 export const deleteCart = async (req, res) => {
   const session = mongoose.startSession();
   try {
-    (await session).startTransaction();
+    await session.startTransaction();
     const { cartId } = req.body;
     const cart = await Cart.findByIdAndDelete(cartId).session(session);
 
@@ -273,9 +219,9 @@ export const deleteCart = async (req, res) => {
       await session.abortTransaction;
       return res.status(404).json({ message: "Cart not found" });
     }
-    const deleteCartbucket = await LargeCartItem.findByIdAndDelete({
-      cartId,
-    }).session(session);
+    const deleteCartbucket = await LargeCartItem.deleteMany({ cartId }).session(
+      session
+    );
 
     await session.commitTransaction();
     res.status(200).json({ message: "Cart deleted successfully" });
@@ -283,5 +229,114 @@ export const deleteCart = async (req, res) => {
     res.status(500).json({ message: err.message });
   } finally {
     await session.endSession;
+  }
+};
+
+export const deleteEachItemFromCart = async (req, res) => {
+  try {
+    const { cartId, cartItemId } = req.body;
+
+    // 1️⃣ Check if cart exists
+    const cart = await Cart.findById(cartId);
+    if (!cart) {
+      return res.status(400).json({ message: "Couldn't find a cart" });
+    }
+
+    // 2️⃣ Filter out the item
+    const originalLength = cart.cart_items.length;
+    cart.cart_items = cart.cart_items.filter(
+      (i) => i._id.toString() !== cartItemId
+    );
+
+    // 3️⃣ If something was removed, save
+    if (cart.cart_items.length < originalLength) {
+      await cart.save();
+      return res.status(200).json({ message: "Item deleted from cart" });
+    }
+
+    // 4️⃣ Otherwise, try deleting from LargeCartItem bucket
+    const deleteItemFromBucket = await LargeCartItem.findOneAndDelete({
+      _id: cartItemId,
+      cartId,
+    });
+
+    if (deleteItemFromBucket) {
+      return res.status(200).json({ message: "Item deleted from bucket" });
+    }
+
+    // 5️⃣ Nothing was deleted anywhere
+    return res.status(404).json({ message: "Item not found" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+export const getActiveCart = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    console.log(userId)
+    const cart = await Cart.findOne({ userId, status: "active" });
+    if (!cart) {
+      return res
+        .status(400)
+        .json({ message: "could not find any active cart" });
+    }
+    let bucketItems = [];
+    if (cart.cart_items.length >= 500) {
+      bucketItems = await LargeCartItem.find({ cartId: cart._id });
+    }
+
+    const allItems = [
+      ...cart.cart_items,
+      ...(bucketItems && bucketItems.length > 0 ? bucketItems : []),
+    ];
+    const cartData = cart.toObject();
+    cartData.cart_items = allItems;
+
+    res.status(200).json({ cart: cartData });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+export const getCartHistory = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const carts = await Cart.find({ userId });
+    if (carts.length == 0) {
+      return res
+        .status(404)
+        .json({ message: "couldnt found any cart history" });
+    }
+    const cartsWithBuckets = await Promise.all(
+      carts.map(async (cart) => {
+        let bucketItems = [];
+
+        // Only check if cart_items might be full or if you always store overflow
+        if (cart.cart_items.length >= 500) {
+          bucketItems = await LargeCartItem.find({ cartId: cart._id });
+        }
+
+        // Merge cart_items and bucket items (if any)
+        const allItems = [
+          ...(cart.cart_items || []),
+          ...(bucketItems?.length ? bucketItems : []),
+        ];
+        const cartData = cart.toObject();
+        cartData.cart_items = allItems;
+
+        // Return a combined view
+        return cartData;
+      })
+    );
+    return res.status(200).json({
+      message: "Cart history fetched successfully",
+      carts: cartsWithBuckets,
+    });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ message: err.message });
   }
 };

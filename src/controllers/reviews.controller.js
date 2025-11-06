@@ -30,10 +30,6 @@ export const createReview = async (req, res) => {
       return res.status(404).json({ message: "Product not found." });
     }
 
-    // productRead.recentReview.userID = userId;
-    // productRead.recentReview.ratingValue = rating;
-    // productRead.recentReview.comment = comment;
-    // productRead.recentReview.date = new Date();
     productRead.recentReview = {
       reviewId: savedReview._id,
       userId,
@@ -148,15 +144,18 @@ export const deleteReview = async (req, res) => {
 
     // Check if the user is the owner of the review
     if (review.userId.toString() !== userId) {
-
       return res
         .status(403)
         .json({ message: "You are not authorized to delete this review." });
     }
 
-    const deletedReview = await Review.findByIdAndDelete(reviewId).session(session);
+    const deletedReview = await Review.findByIdAndDelete(reviewId).session(
+      session
+    );
 
-    const product = await Product.findById(deletedReview.productId).session(session);
+    const product = await Product.findById(deletedReview.productId).session(
+      session
+    );
     if (!product) {
       await session.abortTransaction();
       return res.status(404).json({ message: "Associated product not found." });
@@ -165,7 +164,7 @@ export const deleteReview = async (req, res) => {
     if (product.recentReview.reviewId.toString() === reviewId) {
       const latestReview = await Review.findOne({ productId: product._id })
         .sort({ createdAt: -1 })
-         .skip(1)
+        .skip(1)
         .session(session);
 
       product.recentReview = {
